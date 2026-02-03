@@ -13,7 +13,26 @@ import 'package:libro/features/home/view/screens/bottom_navbar_screen.dart';
 import 'package:libro/features/vendor/view/screens/vendor_bottom_nav_screen.dart';
 import 'package:libro/shared/providers/firebase_providers.dart';
 
+// --- Providers ---
+
 final splashFinishedProvider = StateProvider<bool>((ref) => false);
+
+/// 🔹 Real-time Stream: Listens to the user document.
+final userRoleProvider = StreamProvider<String?>((ref) {
+  final user = ref.watch(authStateChangesProvider).value;
+  if (user == null) return Stream.value(null);
+
+  return FirebaseFirestore.instance
+      .collection('users')
+      .doc(user.uid)
+      .snapshots()
+      .map((doc) {
+    if (!doc.exists) return null; 
+    final data = doc.data() as Map<String, dynamic>?;
+    final rawUserType = data?['userType'] as String?;
+    return (rawUserType ?? 'bookReader').toLowerCase().trim();
+  });
+});
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +58,6 @@ class MyApp extends ConsumerWidget {
     final authState = ref.watch(authStateChangesProvider);
     final isSplashFinished = ref.watch(splashFinishedProvider);
 
-    // Splash timer
     if (!isSplashFinished) {
       Future.delayed(const Duration(seconds: 3), () {
         if (ref.read(splashFinishedProvider.notifier).mounted) {
@@ -78,48 +96,32 @@ class MyApp extends ConsumerWidget {
 
     return authState.when(
       data: (user) {
-        if (user == null) {
-          return const LoginScreen();
-        }
+        if (user == null) return const LoginScreen();
 
-        return FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .get(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+        // 🔹 THE FIX: Watch the role stream
+        final roleState = ref.watch(userRoleProvider);
+
+        // We check if the role data is actually present. 
+        // If it's loading OR the data is null (doc doesn't exist yet), 
+        // we stay on a clean loading screen.
+        return roleState.when(
+          data: (userType) {
+            if (userType == null) {
+              return const Scaffold(body: Center(child: CircularProgressIndicator()));
             }
-
-            // Error or no document → treat as normal user (bookReader)
-            if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
-              return const BottomNavbarScreen(initialIndex: 0);
-            }
-
-            final data = snapshot.data!.data() as Map<String, dynamic>?;
-            final rawUserType = data?['userType'] as String?;
-            
-            // Same default logic as in UserModel
-            final userType = (rawUserType ?? 'bookReader').toLowerCase().trim();
-
-            // Debug print (remove later if you want)
-            // print('User: ${user.uid} | userType: $rawUserType → resolved: $userType');
 
             if (userType == 'vendor') {
               return const VendorBottomNavScreen();
             }
-
-            // everything else including 'bookReader', null, empty, typos → user screen
             return const BottomNavbarScreen(initialIndex: 0);
           },
+          // 🔹 This stops the "Single Frame" flash of the Reader screen
+          loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+          error: (err, stack) => const BottomNavbarScreen(initialIndex: 0),
         );
       },
       loading: () => const SplashScreen(key: ValueKey('splash_loading')),
-      error: (err, stack) {
-        debugPrint('Auth error: $err');
-        return const LoginScreen();
-      },
+      error: (err, stack) => const LoginScreen(),
     );
   }
 }
