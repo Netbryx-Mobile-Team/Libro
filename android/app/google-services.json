@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "254002245919",
+    "project_id": "libro-7ceab",
+    "storage_bucket": "libro-7ceab.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:254002245919:android:d8dff6cb4d804dd017402a",
+        "android_client_info": {
+          "package_name": "com.company.libro"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "254002245919-gtejioo3lpfajqoq333hqma1nivolqgo.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB_gajh0JxMYccYDcCQDPBFPv84BYY_LpA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "254002245919-gtejioo3lpfajqoq333hqma1nivolqgo.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "254002245919-41it05io5l8k9u7jhlvc0itk96te3q8f.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.libro"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
