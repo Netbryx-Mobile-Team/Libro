@@ -12,8 +12,29 @@ import 'package:libro/features/auth/view/screens/login_screen.dart';
 import 'package:libro/features/home/view/screens/bottom_navbar_screen.dart';
 import 'package:libro/features/vendor/view/screens/vendor_bottom_nav_screen.dart';
 import 'package:libro/shared/providers/firebase_providers.dart';
+// 🔹 IMPORT YOUR VIEW MODEL
+import 'package:libro/features/auth/view_model/signup_view_model.dart'; 
+
+// --- Providers ---
 
 final splashFinishedProvider = StateProvider<bool>((ref) => false);
+
+/// 🔹 Real-time Stream: Listens to the user document.
+final userRoleProvider = StreamProvider<String?>((ref) {
+  final user = ref.watch(authStateChangesProvider).value;
+  if (user == null) return Stream.value(null);
+
+  return FirebaseFirestore.instance
+      .collection('users')
+      .doc(user.uid)
+      .snapshots()
+      .map((doc) {
+    if (!doc.exists) return null;
+    final data = doc.data() as Map<String, dynamic>?;
+    final rawUserType = data?['userType'] as String?;
+    return (rawUserType ?? 'bookReader').toLowerCase().trim();
+  });
+});
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,11 +60,13 @@ class MyApp extends ConsumerWidget {
     final authState = ref.watch(authStateChangesProvider);
     final isSplashFinished = ref.watch(splashFinishedProvider);
 
-    // Splash timer
     if (!isSplashFinished) {
       Future.delayed(const Duration(seconds: 3), () {
         if (ref.read(splashFinishedProvider.notifier).mounted) {
           ref.read(splashFinishedProvider.notifier).state = true;
+          
+          // 🔹 SAFETY CHECK: Reset the signup state when splash ends
+          ref.read(signupViewModelProvider.notifier).resetState();
         }
       });
     }
@@ -78,48 +101,32 @@ class MyApp extends ConsumerWidget {
 
     return authState.when(
       data: (user) {
-        if (user == null) {
-          return const LoginScreen();
-        }
+        if (user == null) return const LoginScreen();
 
-        return FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .get(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+        // 🔹 Watch the role stream
+        final roleState = ref.watch(userRoleProvider);
+
+        return roleState.when(
+          data: (userType) {
+            // FIX: If data is null (doc doesn't exist), 
+            // do not show a blank spinner, show splash or go to login.
+            if (userType == null) {
+              return const LoginScreen(); // Redirect if user data is broken
             }
-
-            // Error or no document → treat as normal user (bookReader)
-            if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
-              return const BottomNavbarScreen(initialIndex: 0);
-            }
-
-            final data = snapshot.data!.data() as Map<String, dynamic>?;
-            final rawUserType = data?['userType'] as String?;
-            
-            // Same default logic as in UserModel
-            final userType = (rawUserType ?? 'bookReader').toLowerCase().trim();
-
-            // Debug print (remove later if you want)
-            // print('User: ${user.uid} | userType: $rawUserType → resolved: $userType');
 
             if (userType == 'vendor') {
               return const VendorBottomNavScreen();
             }
-
-            // everything else including 'bookReader', null, empty, typos → user screen
             return const BottomNavbarScreen(initialIndex: 0);
           },
+          // 🔹 Shows splash instead of blank screen while fetching user role
+          loading: () => const SplashScreen(key: ValueKey('splash_loading_role')),
+          error: (err, stack) => const LoginScreen(),
         );
       },
-      loading: () => const SplashScreen(key: ValueKey('splash_loading')),
-      error: (err, stack) {
-        debugPrint('Auth error: $err');
-        return const LoginScreen();
-      },
+      // 🔹 Shows splash instead of blank screen while fetching auth state
+      loading: () => const SplashScreen(key: ValueKey('splash_loading_auth')),
+      error: (err, stack) => const LoginScreen(),
     );
   }
 }

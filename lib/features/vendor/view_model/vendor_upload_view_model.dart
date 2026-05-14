@@ -25,7 +25,7 @@ class VendorUploadViewModel {
     required String sellerName,
     required String sellerUid,
     required BuildContext context,
-    String collection = 'books',
+    String collection = 'books', required bookImagesBase64,
   }) async {
     try {
       String? imageUrl;

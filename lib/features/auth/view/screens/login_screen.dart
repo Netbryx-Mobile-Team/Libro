@@ -1,5 +1,6 @@
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:libro/exports.dart';
+import 'package:libro/features/auth/view/screens/otp.dart';
 import 'package:libro/features/auth/view_model/auth_view_model.dart';
 import 'package:libro/features/auth/view_model/login_view_model.dart';
 import 'package:libro/features/auth/view_model/signup_view_model.dart';
@@ -296,10 +297,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
-              onPressed: () => CustomSnackbar.show(
-                context: context,
-                message: "Forgot Password?",
-              ),
+              onPressed: () async {
+  final notifier = ref.read(loginViewModelProvider.notifier);
+
+  try {
+    await notifier.forgotPassword();
+
+    if (mounted) {
+      CustomSnackbar.show(
+        context: context,
+        message: "Password reset email sent. Check inbox.",
+      );
+    }
+  } catch (e) {
+    CustomSnackbar.show(
+      context: context,
+      message: e.toString(),
+      backgroundColor: Colors.red,
+    );
+  }
+},
+
               child: Text(
                 "Forgot password?",
                 style: AppStyles.bodySmall.copyWith(
@@ -402,23 +420,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               validator: signupNotifier.validatePassword,
             ),
           ),
-          SizedBox(height: _gapSmall),
-          _buildWhiteFieldWrapper(
-            child: CustomTextField(
-              hintText: "Phone #",
-              keyboardType: TextInputType.phone,
-              radius: 30,
-              height: _fieldHeight,
-              prefixIcon: const Icon(
-                Icons.phone_outlined,
-                color: AppColors.primaryColor,
-                size: 18,
-              ),
-              inputFormatters: [phoneFormatter],
-              onChanged: signupNotifier.setPhone,
-              validator: signupNotifier.validatePhone,
-            ),
-          ),
+          // PHONE FIELD (Only for Reader)
+if (signupState.userType != 'vendor') ...[
+  SizedBox(height: _gapSmall),
+  _buildWhiteFieldWrapper(
+    child: CustomTextField(
+      hintText: "Phone #",
+      keyboardType: TextInputType.phone,
+      radius: 30,
+      height: _fieldHeight,
+      prefixIcon: const Icon(
+        Icons.phone_outlined,
+        color: AppColors.primaryColor,
+        size: 18,
+      ),
+      inputFormatters: [phoneFormatter],
+      onChanged: signupNotifier.setPhone,
+      validator: signupNotifier.validatePhone,
+    ),
+  ),
+],
 
           // VENDOR COMPACT FIELDS
           if (signupState.userType == 'vendor') ...[
@@ -438,41 +459,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 validator: signupNotifier.validateShopName,
               ),
             ).animate().fadeIn(),
-            SizedBox(height: _gapSmall),
-            _buildWhiteFieldWrapper(
-              child: CustomTextField(
-                controller: _shopAddressController,
-                hintText: "Shop Address",
-                radius: 30,
-                height: _fieldHeight,
-                prefixIcon: const Icon(
-                  Icons.location_on_outlined,
-                  color: AppColors.primaryColor,
-                  size: 18,
-                ),
-                onChanged: signupNotifier.setShopAddress,
-                validator: signupNotifier.validateShopAddress,
-              ),
-            ).animate().fadeIn(),
-            SizedBox(height: _gapSmall),
-            _buildWhiteFieldWrapper(
-              child: CustomTextField(
-                controller: _cnicController,
-                hintText: "CNIC",
-                keyboardType: TextInputType.number,
-                radius: 30,
-                height: _fieldHeight,
-                prefixIcon: const Icon(
-                  Icons.credit_card,
-                  color: AppColors.primaryColor,
-                  size: 18,
-                ),
-                inputFormatters: [cnicFormatter],
-                onChanged: signupNotifier.setCnic,
-                validator: signupNotifier.validateCnic,
-              ),
-            ).animate().fadeIn(),
-          ],
+           ],
 
           SizedBox(height: 15.h),
 
@@ -565,30 +552,63 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  Future<void> _handleSignup(SignupViewModel notifier) async {
-    if (_signupFormKey.currentState!.validate()) {
-      try {
-        await notifier.signUp();
-        CustomSnackbar.show(
-          context: context,
-          message: "Account Created! Switching to Login...",
-        );
-        _toggleTab(false);
-      } catch (e) {
-        CustomSnackbar.show(
-          context: context,
-          message: e.toString(),
-          backgroundColor: Colors.red,
-        );
-      }
-    } else {
-      CustomSnackbar.show(
-        context: context,
-        message: "Please check all fields",
-        backgroundColor: Colors.red,
-      );
-    }
+Future<void> _handleSignup(SignupViewModel notifier) async {
+  if (!_signupFormKey.currentState!.validate()) {
+    CustomSnackbar.show(
+      context: context,
+      message: "Please check all fields",
+      backgroundColor: Colors.red,
+    );
+    return;
   }
+
+  try {
+    final state = ref.read(signupViewModelProvider);
+
+    // 🔹 VENDOR FLOW: Must verify email first
+    if (state.userType == "vendor") {
+      // 🔹 Push the Email Verification Screen.
+      // 🔹 It will call sendEmailOtp() in its initState.
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EmailVerificationScreen(
+            email: state.email, // 🔹 Pass the email here
+            onVerified: () async {
+              // 🔹 Complete signup after Email verified
+              await notifier.signUp();
+
+              if (!mounted) return;
+              CustomSnackbar.show(
+                context: context,
+                message: "Account Created! Switching to Login...",
+              );
+              _toggleTab(false); // Switch to login tab
+            },
+          ),
+        ),
+      );
+      return; // Exit after handling vendor
+    }
+
+    // ✅ Reader → Normal signup without verification
+    await notifier.signUp();
+
+    if (!mounted) return;
+    CustomSnackbar.show(
+      context: context,
+      message: "Account Created! Switching to Login...",
+    );
+    _toggleTab(false);
+  } catch (e) {
+    if (!mounted) return;
+    CustomSnackbar.show(
+      context: context,
+      message: e.toString(),
+      backgroundColor: Colors.red,
+    );
+  }
+}
 
   Future<void> _handleGoogleAuth(dynamic signupViewModelProvider) async {
     try {

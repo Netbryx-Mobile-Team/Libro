@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:libro/core/services/storage_service.dart';
 import 'package:libro/features/notifications/view_model/notification_view_model.dart';
+import 'package:libro/features/vendor/view_model/vendor_upload_view_model.dart';
 import 'package:libro/shared/providers/firebase_providers.dart';
 
 /// State Class
@@ -123,7 +124,9 @@ class UploadViewModel extends StateNotifier<UploadState> {
   }
 }
 
-final uploadViewModelProvider =
-    StateNotifierProvider.autoDispose<UploadViewModel, UploadState>((ref) {
+final vendorUploadViewModelProvider =
+    StateNotifierProvider<UploadViewModel, UploadState>((ref) {
   return UploadViewModel(ref.watch(storageServiceProvider), ref);
 });
+
+

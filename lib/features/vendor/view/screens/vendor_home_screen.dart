@@ -15,11 +15,8 @@ import 'package:libro/features/vendor/view/widgets/vendor_app_drawer.dart';
 import 'package:libro/features/vendor/view_model/vendor_view_model.dart';
 import 'package:libro/features/notifications/view_model/notification_view_model.dart';
 import 'package:libro/core/models/store_model.dart';
-import 'package:libro/features/payment/invoice.dart'; // if still needed
-
-// ────────────────────────────────────────────────
-//   Vendor Home Screen (corrected - stable orders list)
-// ────────────────────────────────────────────────
+import 'package:libro/features/payment/invoice.dart';
+import 'view_all_stores_screen.dart';
 
 class VendorHomeScreen extends ConsumerStatefulWidget {
   const VendorHomeScreen({super.key});
@@ -32,13 +29,8 @@ class _VendorHomeScreenState extends ConsumerState<VendorHomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _isCheckingCredits = false;
 
-  // Unread chat/inquiry count
   int _unreadChatCount = 0;
-
-  // Prevent duplicate popups
   final Set<String> _shownInquiryIds = {};
-
-  // ── Orders Stream (moved here so it doesn't recreate on every build) ──
   late final Stream<QuerySnapshot> _ordersStream;
 
   @override
@@ -58,6 +50,8 @@ class _VendorHomeScreenState extends ConsumerState<VendorHomeScreen> {
       _loadUnreadChatCount();
     });
   }
+
+  // ================= CHAT + INQUIRY =================
 
   Future<void> _loadUnreadChatCount() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -90,8 +84,6 @@ class _VendorHomeScreenState extends ConsumerState<VendorHomeScreen> {
           .limit(15)
           .get();
 
-      debugPrint("Vendor check → found ${query.docs.length} possible new inquiries");
-
       for (var doc in query.docs) {
         final chatId = doc.id;
         if (_shownInquiryIds.contains(chatId)) continue;
@@ -103,7 +95,6 @@ class _VendorHomeScreenState extends ConsumerState<VendorHomeScreen> {
         if (lastMessageBy != null && lastMessageBy != uid) {
           _shownInquiryIds.add(chatId);
           _showInquiryPopup(lastMessage, chatId);
-          debugPrint("→ Showing popup for chat: $chatId");
         }
       }
     } catch (e) {
@@ -225,6 +216,10 @@ class _VendorHomeScreenState extends ConsumerState<VendorHomeScreen> {
     }
   }
 
+  // ================= DASHBOARD =================
+final TextEditingController _searchController = TextEditingController();
+String _selectedCity = "All"; // default
+
   Future<void> _refreshDashboard() async {
     ref.invalidate(vendorViewModelProvider);
     ref.invalidate(allStoresStreamProvider);
@@ -285,15 +280,14 @@ class _VendorHomeScreenState extends ConsumerState<VendorHomeScreen> {
                 MaterialPageRoute(builder: (_) => const SubscriptionPlanScreen()),
               );
             },
-            child: const Text(
-              "View Plans",
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text("View Plans", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
   }
+
+  // ================= UI =================
 
   @override
   Widget build(BuildContext context) {
@@ -386,30 +380,53 @@ class _VendorHomeScreenState extends ConsumerState<VendorHomeScreen> {
                                 ),
                               ],
                             ),
+                           gapH32,
+Row(
+  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  children: [
+    Text("Market Overview", style: AppStyles.headingSmall),
+    TextButton(
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+ builder: (_) => ViewAllStoresScreen(
+      searchController: _searchController,
+      selectedCity: _selectedCity,
+    ),
+          ),
+        );
+      },
+      child: const Text("View All"),
+    ),
+  ],
+),
+gapH16,
+allStoresAsync.when(
+  loading: () => const Center(
+      child: CircularProgressIndicator(color: AppColors.primaryColor)),
+  error: (e, s) => Center(child: Text("Error: $e")),
+  data: (stores) {
+    if (stores.isEmpty) {
+      return const Center(child: Text("No stores available yet."));
+    }
 
-                            gapH32,
-                            Text("Market Overview", style: AppStyles.headingSmall),
-                            gapH16,
-                            allStoresAsync.when(
-                              loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primaryColor)),
-                              error: (e, s) => Center(child: Text("Error: $e")),
-                              data: (stores) {
-                                if (stores.isEmpty) {
-                                  return const Center(child: Text("No stores available yet."));
-                                }
-                                return ListView.separated(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  itemCount: stores.length,
-                                  separatorBuilder: (_, __) => gapH16,
-                                  itemBuilder: (context, index) {
-                                    final store = stores[index];
-                                    return _buildStoreTile(context, store);
-                                  },
-                                );
-                              },
-                            ),
-                            gapH40,
+    // ✅ LIMIT APPLIED HERE
+    final limitedStores = stores.take(10).toList();
+
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: limitedStores.length,
+      separatorBuilder: (_, __) => gapH16,
+      itemBuilder: (context, index) {
+        final store = limitedStores[index];
+        return _buildStoreTile(context, store);
+      },
+    );
+  },
+),
+ gapH40,
                           ],
                         ),
                       ),
@@ -419,13 +436,36 @@ class _VendorHomeScreenState extends ConsumerState<VendorHomeScreen> {
               ],
             ),
           ),
+
+          // ================= ONLY ADDITION =================
+          Positioned(
+            bottom: 20,
+            right: 20,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddStoreScreen()),
+                );
+              },
+              child: const Text(
+                "Demo Add Store",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+          // =================================================
         ],
       ),
     );
   }
 
-  // ── Header, Action Card, Store Tile remain the same ──
-  // (copy them from your original code if needed – I didn't change them)
+  // HEADER, ACTION CARD, STORE TILE
+  // (unchanged from your original)
 
   Widget _buildHeader(BuildContext context, WidgetRef ref) {
     final unreadNotifCount = ref.watch(unreadNotificationCountProvider);

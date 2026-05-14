@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -9,16 +11,14 @@ import 'package:libro/exports.dart';
 import 'package:libro/features/chat/view/screens/chat_screen.dart';
 import 'package:libro/features/home/view/screens/book_detail_screen.dart';
 import 'package:libro/features/payment/invoice.dart';
+//import 'package:libro/features/search_and_filters/view/screens/store_specific_search_screen.dart';
 import 'package:libro/features/stores/view/screens/specific_search_screen.dart';
-import 'package:libro/features/subscription/view/screens/jazzcash_payment_screen.dart';
-import 'package:libro/features/vendor/view/screens/vendor_search.dart';
 import 'package:libro/shared/providers/firebase_providers.dart';
 
 class StoreDetailScreen extends ConsumerStatefulWidget {
   final StoreModel store;
-  final BookModel? book;
 
-  const StoreDetailScreen({super.key, required this.store, required this.book});
+  const StoreDetailScreen({super.key, required this.store, required book});
 
   @override
   ConsumerState<StoreDetailScreen> createState() => _StoreDetailScreenState();
@@ -30,7 +30,7 @@ class _StoreDetailScreenState extends ConsumerState<StoreDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final storageService = ref.watch(storageServiceProvider);
-    final currentUser = ref.watch(authStateChangesProvider).value;
+
     final List<String> images =
         widget.store.shopImagesBase64.isNotEmpty ? widget.store.shopImagesBase64 : [];
 
@@ -42,6 +42,7 @@ class _StoreDetailScreenState extends ConsumerState<StoreDetailScreen> {
             Expanded(
               child: CustomScrollView(
                 slivers: [
+                  // -------------------- APPBAR --------------------
                   SliverAppBar(
                     expandedHeight: 250.h,
                     floating: false,
@@ -58,94 +59,57 @@ class _StoreDetailScreenState extends ConsumerState<StoreDetailScreen> {
                         ),
                       ),
                     ),
-                    actions: [
-                      // Search in store button
-                      Padding(
-                        padding: EdgeInsets.only(right: 12.w, top: 8.h),
-                        child: CircleAvatar(
-                          backgroundColor: Colors.white.withOpacity(0.7),
-                          child: IconButton(
-                            icon: const Icon(Icons.search, color: blackColor),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      VendorStoreSearchScreenForVendor(storeId: widget.store.uid),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      // Ask about a book button
-                      Padding(
-                        padding: EdgeInsets.only(right: 16.w, top: 8.h),
-                        child: CircleAvatar(
-                          backgroundColor: Colors.white.withOpacity(0.7),
-                          child: IconButton(
-                            icon: const Icon(Icons.question_answer, color: blackColor),
-                            onPressed: () {
-                              _showAskAboutBookDialog(context, widget.store);
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
                     flexibleSpace: FlexibleSpaceBar(
-                      background: Container(
-                        color: Colors.black,
-                        child: Stack(
-                          alignment: Alignment.bottomCenter,
-                          children: [
-                            images.isNotEmpty
-                                ? PageView.builder(
-                                    itemCount: images.length,
-                                    onPageChanged: (index) {
-                                      setState(() {
-                                        _currentImageIndex = index;
-                                      });
-                                    },
-                                    itemBuilder: (context, index) {
-                                      return Image(
-                                        image: storageService
-                                            .imageFromBase64String(images[index])
-                                            .image,
-                                        fit: BoxFit.contain,
-                                      );
-                                    },
-                                  )
-                                : Image.asset(
-                                    AppAssets.storeImagePlaceholder,
-                                    fit: BoxFit.contain,
-                                    width: double.infinity,
-                                  ),
-                            if (images.length > 1)
-                              Padding(
-                                padding: EdgeInsets.only(bottom: 16.h),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: List.generate(
-                                    images.length,
-                                    (index) => Container(
-                                      margin: EdgeInsets.symmetric(horizontal: 4.w),
-                                      width: 8.w,
-                                      height: 8.w,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: _currentImageIndex == index
-                                            ? AppColors.primaryColor
-                                            : Colors.white.withOpacity(0.5),
-                                      ),
+                      background: Stack(
+                        alignment: Alignment.bottomCenter,
+                        children: [
+                          images.isNotEmpty
+                              ? PageView.builder(
+                                  itemCount: images.length,
+                                  onPageChanged: (index) {
+                                    setState(() {
+                                      _currentImageIndex = index;
+                                    });
+                                  },
+                                  itemBuilder: (context, index) {
+                                    return Image.memory(
+                                      base64Decode(images[index]),
+                                      fit: BoxFit.contain,
+                                    );
+                                  },
+                                )
+                              : Image.asset(
+                                  AppAssets.storeImagePlaceholder,
+                                  fit: BoxFit.contain,
+                                  width: double.infinity,
+                                ),
+                          if (images.length > 1)
+                            Padding(
+                              padding: EdgeInsets.only(bottom: 16.h),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: List.generate(
+                                  images.length,
+                                  (index) => Container(
+                                    margin: EdgeInsets.symmetric(horizontal: 4.w),
+                                    width: 8.w,
+                                    height: 8.w,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: _currentImageIndex == index
+                                          ? AppColors.primaryColor
+                                          : Colors.white.withOpacity(0.5),
                                     ),
                                   ),
                                 ),
                               ),
-                          ],
-                        ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
+
+                  // -------------------- STORE INFO --------------------
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: EdgeInsets.symmetric(horizontal: AppDimens.kPadding),
@@ -199,82 +163,76 @@ class _StoreDetailScreenState extends ConsumerState<StoreDetailScreen> {
                             ),
                           ),
                           gapH20,
-                          Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 20.r,
-                                backgroundColor: Colors.grey.shade300,
-                                child: const Icon(
-                                  Icons.person,
-                                  color: whiteColor,
-                                  size: 24,
-                                ),
-                              ),
-                              gapW12,
-                              Text(
-                                widget.store.ownerName,
-                                style: AppStyles.headingSmall.copyWith(fontSize: 16.sp),
-                              ),
-                            ],
-                          ),
-                          gapH24,
-                          const Divider(),
-                          gapH16,
-                          Text("Books available here", style: AppStyles.headingSmall),
-                          gapH16,
                         ],
                       ),
                     ),
                   ),
-                  // ---------------- STREAMBUILDER ----------------
-                  StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('books_sell')
-                        .where('storeId', isEqualTo: widget.store.uid) // ✅ Fixed query
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const SliverToBoxAdapter(
-                          child: Center(child: CircularProgressIndicator()),
-                        );
-                      }
 
-                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                        print("No books found for store: ${widget.store.uid}"); // Debug
-                        return SliverToBoxAdapter(
-                          child: Center(
-                            child: Padding(
-                              padding: EdgeInsets.only(bottom: 40.h),
-                              child: Text(
-                                "No books listed yet.",
-                                style: AppStyles.bodySmall,
-                              ),
-                            ),
+                  // -------------------- BOOKS HEADER --------------------
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: AppDimens.kPadding),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text("Books available here", style: AppStyles.headingSmall),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => StoreSpecificSearchScreen(store: widget.store),
+                                ),
+                              );
+                            },
+                            child: Text("View All", style: TextStyle(color: AppColors.primaryColor)),
                           ),
-                        );
-                      }
-
-                      // Debug: print all fetched docs
-                      print("Books fetched for store: ${widget.store.uid}");
-                      snapshot.data!.docs.forEach((doc) {
-                        print(doc.data());
-                      });
-
-                      final books = snapshot.data!.docs
-                          .map((doc) => BookModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
-                          .toList();
-
-                      print("Total books converted to model: ${books.length}"); // Debug
-
-                      return SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) => _buildSmallBookRow(context, books[index]),
-                          childCount: books.length,
-                        ),
-                      );
-                    },
+                        ],
+                      ),
+                    ),
                   ),
-                  SliverToBoxAdapter(child: SizedBox(height: 20.h)),
+
+                // -------------------- BOOKS LIST --------------------
+StreamBuilder<QuerySnapshot>(
+  stream: FirebaseFirestore.instance
+      .collection('books_sell')
+      .where('storeId', isEqualTo: widget.store.uid) // ✅ Changed to storeId
+      .orderBy('uploadDate', descending: true)
+      .snapshots(),
+  builder: (context, snapshot) {
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return const SliverToBoxAdapter(
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 40.h),
+            child: Text("No books listed yet.", style: AppStyles.bodySmall),
+          ),
+        ),
+      );
+    }
+
+    final allBooks = snapshot.data!.docs
+        .map((doc) => BookModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+        .toList();
+
+    // Show only first 10 books
+    final booksToShow = allBooks.take(10).toList();
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) => _buildSmallBookRow(context, booksToShow[index]),
+        childCount: booksToShow.length,
+      ),
+    );
+  },
+),
+               SliverToBoxAdapter(child: SizedBox(height: 20.h)),
                 ],
               ),
             ),
@@ -284,147 +242,10 @@ class _StoreDetailScreenState extends ConsumerState<StoreDetailScreen> {
     );
   }
 
-  // ------------------ ASK ABOUT BOOK ------------------
-  void _showAskAboutBookDialog(BuildContext context, StoreModel store) {
-    final TextEditingController bookController = TextEditingController();
-    final TextEditingController messageController = TextEditingController();
-    final currentUser = FirebaseAuth.instance.currentUser;
-
-    if (currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please login to ask about a book")),
-      );
-      return;
-    }
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text("Ask about a book"),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Ask ${store.shopName} if they have this book",
-                  style: const TextStyle(fontSize: 14, color: Colors.grey),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: bookController,
-                  decoration: const InputDecoration(
-                    labelText: "Book title / Author / ISBN",
-                    border: OutlineInputBorder(),
-                    hintText: "e.g. Harry Potter and the Philosopher's Stone",
-                  ),
-                  textCapitalization: TextCapitalization.sentences,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: messageController,
-                  decoration: const InputDecoration(
-                    labelText: "Additional message (optional)",
-                    border: OutlineInputBorder(),
-                    hintText: "Any specific edition, condition, etc...",
-                  ),
-                  maxLines: 3,
-                  textCapitalization: TextCapitalization.sentences,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final bookName = bookController.text.trim();
-                if (bookName.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Please enter book name")),
-                  );
-                  return;
-                }
-                Navigator.pop(dialogContext);
-                await _sendAvailabilityInquiry(
-                  context,
-                  store,
-                  currentUser.uid,
-                  currentUser.displayName ?? "Customer",
-                  bookName,
-                  messageController.text.trim(),
-                );
-              },
-              child: const Text("Send Inquiry"),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _sendAvailabilityInquiry(
-    BuildContext context,
-    StoreModel store,
-    String customerUid,
-    String customerName,
-    String bookName,
-    String additionalMessage,
-  ) async {
-    try {
-      final ids = [customerUid, store.uid]..sort();
-      final chatId = ids.join('_');
-      final messageText = additionalMessage.isEmpty
-          ? "Hi, do you have '$bookName' in stock?"
-          : "Hi, do you have '$bookName' in stock?\n\n$additionalMessage";
-
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(chatId)
-          .collection('messages')
-          .add({
-        'senderId': customerUid,
-        'senderName': customerName,
-        'receiverId': store.uid,
-        'receiverName': store.ownerName,
-        'text': messageText,
-        'type': 'availability_inquiry',
-        'createdAt': FieldValue.serverTimestamp(),
-        'read': false,
-      });
-
-      await FirebaseFirestore.instance.collection('chats').doc(chatId).set({
-        'participants': [customerUid, store.uid],
-        'lastMessage': messageText,
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'lastMessageBy': customerUid,
-        'storeId': store.uid,
-        'storeName': store.shopName,
-      }, SetOptions(merge: true));
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Your inquiry has been sent! Vendor will reply soon."),
-          duration: Duration(seconds: 3),
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error sending inquiry: $e")),
-      );
-    }
-  }
-
   // ------------------ BOOK ROW ------------------
   Widget _buildSmallBookRow(BuildContext context, BookModel book) {
-    final storageService = ref.watch(storageServiceProvider);
-
     return GestureDetector(
-      onTap: () => _showBookOptionsDialog(context, book, storageService),
+      onTap: () => _showBookOptionsDialog(context, book),
       child: Container(
         margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
         padding: EdgeInsets.all(10.w),
@@ -492,11 +313,7 @@ class _StoreDetailScreenState extends ConsumerState<StoreDetailScreen> {
   }
 
   // ------------------ BOOK OPTIONS ------------------
-  void _showBookOptionsDialog(
-    BuildContext context,
-    BookModel book,
-    StorageService storageService,
-  ) {
+  void _showBookOptionsDialog(BuildContext context, BookModel book) {
     showModalBottomSheet(
       context: context,
       shape: RoundedRectangleBorder(
@@ -573,14 +390,12 @@ class _StoreDetailScreenState extends ConsumerState<StoreDetailScreen> {
                           String rawPrice = book.price?.replaceAll(RegExp(r'[^0-9.]'), '') ?? '0';
                           double amount = double.tryParse(rawPrice) ?? 0.0;
                           if (amount > 0) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => InvoiceScreen(
-            book: book,
-          ),
-        ),
-      );
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => InvoiceScreen(book: book),
+                              ),
+                            );
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text("Invalid price")),

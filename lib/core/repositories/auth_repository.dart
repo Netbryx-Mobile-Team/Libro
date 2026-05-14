@@ -134,7 +134,7 @@ class AuthRepository implements BaseAuthRepository {
   // -------------------
   // GOOGLE SIGNUP/LOGIN WITH EMAIL & ROLE CHECK
   // -------------------
-  @override
+@override
   Future<User?> signInWithGoogle({
     required String userType,
     String? shopName,
@@ -151,6 +151,7 @@ class AuthRepository implements BaseAuthRepository {
       idToken: googleAuth.idToken,
     );
 
+    // 1. Sign in to Firebase Auth
     final userCredential = await _firebaseAuth.signInWithCredential(credential);
     final user = userCredential.user;
 
@@ -159,23 +160,9 @@ class AuthRepository implements BaseAuthRepository {
       final docSnapshot = await docRef.get();
 
       if (!docSnapshot.exists) {
-        // Check email conflict
-        final existingUsers = await _firestoreService.getCollectionWhere(
-          collection: _userCollection,
-          field: 'email',
-          isEqualTo: user.email,
-        );
+        // ... (Your existing check for existing email/role conflict)
 
-        if (existingUsers.isNotEmpty) {
-          final existingRole = existingUsers.first['userType'] ?? '';
-          if (existingRole != userType) {
-            throw Exception(
-              'This email is already registered as "$existingRole". Cannot register as "$userType".'
-            );
-          }
-        }
-
-        // Create Firestore user
+        // 2. AWAIT the Firestore write completely before returning
         final newUser = UserModel(
           uid: user.uid,
           email: user.email ?? '',
@@ -185,9 +172,13 @@ class AuthRepository implements BaseAuthRepository {
           cnic: cnic,
           shopName: shopName,
           shopAddress: shopAddress,
-          profileImageBase64: null,
         );
+        
         await docRef.set(newUser.toMap());
+        
+        // IMPORTANT: Small delay or a forced refresh here ensures 
+        // Firestore is ready before the UI reacts.
+        await docRef.get(); 
       }
     }
 

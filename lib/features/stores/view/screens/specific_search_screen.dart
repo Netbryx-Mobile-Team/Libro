@@ -1,7 +1,6 @@
-// lib/features/search_and_filters/view/screens/store_specific_search_screen.dart
+// lib/features/stores/view/screens/store_specific_search_screen.dart
 
 import 'dart:convert';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,18 +19,19 @@ class StoreSpecificSearchScreen extends ConsumerStatefulWidget {
   const StoreSpecificSearchScreen({super.key, required this.store});
 
   @override
-  ConsumerState<StoreSpecificSearchScreen> createState() => _StoreSpecificSearchScreenState();
+  ConsumerState<StoreSpecificSearchScreen> createState() =>
+      _StoreSpecificSearchScreenState();
 }
 
-class _StoreSpecificSearchScreenState extends ConsumerState<StoreSpecificSearchScreen> {
+class _StoreSpecificSearchScreenState
+    extends ConsumerState<StoreSpecificSearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   String query = '';
 
   Stream<QuerySnapshot> _getBooksStream() {
     return FirebaseFirestore.instance
         .collection('books_sell')
-        .where('sellerUid', isEqualTo: widget.store.uid)  // ← Only this store's books
-        .where('transactionType', isEqualTo: 'Sell')      // optional
+        .where('storeId', isEqualTo: widget.store.uid) // ✅ Fetch all books for this store
         .orderBy('uploadDate', descending: true)
         .snapshots();
   }
@@ -56,7 +56,7 @@ class _StoreSpecificSearchScreenState extends ConsumerState<StoreSpecificSearchS
   Widget build(BuildContext context) {
     final storage = ref.watch(storageServiceProvider);
 
-    // Watch so widget rebuilds when filters change
+    // Watch for filter changes
     ref.watch(searchViewModelProvider);
     final searchState = ref.read(searchViewModelProvider);
 
@@ -99,7 +99,8 @@ class _StoreSpecificSearchScreenState extends ConsumerState<StoreSpecificSearchS
           }
 
           final books = snapshot.data!.docs
-              .map((doc) => BookModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+              .map((doc) =>
+                  BookModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
               .where((book) {
                 final matchesQuery = query.isEmpty ||
                     book.title.toLowerCase().contains(query) ||
@@ -115,12 +116,16 @@ class _StoreSpecificSearchScreenState extends ConsumerState<StoreSpecificSearchS
                     (book.location != null &&
                         searchState.selectedLocations.contains(book.location));
 
-                return matchesQuery && matchesGenre && matchesType && matchesLocation;
+                return matchesQuery &&
+                    matchesGenre &&
+                    matchesType &&
+                    matchesLocation;
               })
               .toList();
 
           if (books.isEmpty) {
-            return const Center(child: Text("No books match your search & filters"));
+            return const Center(
+                child: Text("No books match your search & filters"));
           }
 
           return ListView.builder(
@@ -142,15 +147,19 @@ class _StoreSpecificSearchScreenState extends ConsumerState<StoreSpecificSearchS
                           ),
                         )
                       : const Icon(Icons.book),
-                  title: Text(book.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                  title: Text(book.title,
+                      maxLines: 2, overflow: TextOverflow.ellipsis),
                   subtitle: Text("${book.type ?? ''} • ${book.author ?? ''}"),
                   trailing: Text(
                     "Rs. ${book.price ?? '0'}",
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryColor),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primaryColor),
                   ),
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => BookDetailScreen(book: book,)),
+                    MaterialPageRoute(
+                        builder: (_) => BookDetailScreen(book: book)),
                   ),
                 ),
               );

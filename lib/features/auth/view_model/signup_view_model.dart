@@ -1,27 +1,27 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:libro/core/repositories/auth_repository.dart';
-import 'package:libro/core/services/firestore_service.dart';
 import 'package:libro/features/auth/view_model/auth_view_model.dart';
-import 'package:libro/shared/providers/app_providers.dart';
 import 'package:libro/shared/utils/validation_utils.dart';
+import 'package:libro/shared/providers/app_providers.dart';
 
-// ===============================
-// 1️⃣ Signup State
-// ===============================
 class SignupState {
+  final bool isLoading;
   final String name;
   final String email;
   final String password;
   final String phone;
   final String userType; // 'vendor' or 'bookReader'
-
-  // Vendor-specific fields
   final String cnic;
   final String shopName;
   final String shopAddress;
+  // 🔹 ADDED FIELDS FOR EMAIL OTP
+  final String emailVerificationCode;
+  final bool isEmailVerified;
 
   SignupState({
+    this.isLoading = false,
     this.name = '',
     this.email = '',
     this.password = '',
@@ -30,9 +30,13 @@ class SignupState {
     this.cnic = '',
     this.shopName = '',
     this.shopAddress = '',
+    // 🔹 INITIALIZE FIELDS
+    this.emailVerificationCode = '',
+    this.isEmailVerified = false,
   });
 
   SignupState copyWith({
+    bool? isLoading,
     String? name,
     String? email,
     String? password,
@@ -41,8 +45,12 @@ class SignupState {
     String? cnic,
     String? shopName,
     String? shopAddress,
+    // 🔹 ADD FIELDS
+    String? emailVerificationCode,
+    bool? isEmailVerified,
   }) {
     return SignupState(
+      isLoading: isLoading ?? this.isLoading,
       name: name ?? this.name,
       email: email ?? this.email,
       password: password ?? this.password,
@@ -51,20 +59,22 @@ class SignupState {
       cnic: cnic ?? this.cnic,
       shopName: shopName ?? this.shopName,
       shopAddress: shopAddress ?? this.shopAddress,
+      // 🔹 UPDATE FIELDS
+      emailVerificationCode: emailVerificationCode ?? this.emailVerificationCode,
+      isEmailVerified: isEmailVerified ?? this.isEmailVerified,
     );
   }
 }
 
-// ===============================
-// 2️⃣ Signup ViewModel
-// ===============================
 class SignupViewModel extends StateNotifier<SignupState> {
   final AuthRepository _authRepository;
   final AuthViewModel _authViewModel;
   final ValidationUtils _validator = ValidationUtils();
 
   SignupViewModel(this._authRepository, this._authViewModel)
-      : super(SignupState());
+      : super(SignupState()) {
+    resetState();
+  }
 
   // ---------------------------
   // Input Setters
@@ -80,6 +90,9 @@ class SignupViewModel extends StateNotifier<SignupState> {
       state = state.copyWith(shopName: shopName.trim());
   void setShopAddress(String shopAddress) =>
       state = state.copyWith(shopAddress: shopAddress.trim());
+  // 🔹 ADDED SETTER
+  void setEmailVerificationCode(String code) =>
+      state = state.copyWith(emailVerificationCode: code.trim());
 
   // ---------------------------
   // Validation
@@ -95,89 +108,131 @@ class SignupViewModel extends StateNotifier<SignupState> {
       _validator.validateRequired(value, 'Shop Address');
 
   // ---------------------------
-  // Email/Password Signup
+  // Loading state
+  // ---------------------------
+  void setLoading(bool value) {
+    state = state.copyWith(isLoading: value);
+  }
+
+  // ---------------------------
+  // Verification Handling
+  // ---------------------------
+  
+  // 🔹 UPDATED RESET METHOD
+  void resetState() {
+    state = SignupState(); // Resets to default (isLoading = false)
+    // _verificationId = null; // ❌ REMOVE OLD PHONE DATA
+    // _isPhoneVerified = false; // ❌ REMOVE OLD PHONE DATA
+  }
+
+  // 🔹 NEW METHOD: Send Email OTP (Backend Required)
+  Future<void> sendEmailOtp(String email, {required Function() onCodeSent}) async {
+    if (state.isLoading) return;
+    setLoading(true);
+
+    try {
+      // TODO: Call your backend Cloud Function here to send the actual email
+      // Example: await _authRepository.sendEmailCode(email);
+      
+      // Temporary: Simulate network delay for UI testing
+      await Future.delayed(const Duration(seconds: 2));
+      onCodeSent();
+    } catch (e) {
+      rethrow;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // 🔹 NEW METHOD: Verify Email OTP (Backend Required)
+  Future<void> verifyEmailOtp(String code) async {
+    if (state.isLoading) return;
+    setLoading(true);
+
+    try {
+      // TODO: Call your backend Cloud Function here to verify the code
+      // Example: bool isValid = await _authRepository.verifyEmailCode(state.email, code);
+      
+      // Temporary: Simulate validation
+      await Future.delayed(const Duration(seconds: 2));
+      if (code == "123456") { // Dummy check
+        state = state.copyWith(isEmailVerified: true);
+      } else {
+        throw "Invalid verification code";
+      }
+    } catch (e) {
+      rethrow;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ---------------------------
+  // Signup & Google Signup
   // ---------------------------
   Future<String?> signUp() async {
-  _authViewModel.setLoading(true);
-  try {
-    // 1️⃣ Check if email exists
-    final existingUsers = await _authRepository.firestoreService
-        .getCollectionWhere(
-      collection: 'users',
-      field: 'email',
-      isEqualTo: state.email,
-    );
+    _authViewModel.setLoading(true);
+    try {
+      final existingUsers = await _authRepository.firestoreService
+          .getCollectionWhere(
+        collection: 'users',
+        field: 'email',
+        isEqualTo: state.email,
+      );
 
-    if (existingUsers.isNotEmpty) {
+      if (existingUsers.isNotEmpty) {
+        throw "This email is already used. Please login instead.";
+      }
+
+      final userData = await _authRepository.signUpWithEmailPassword(
+        email: state.email,
+        password: state.password,
+        name: state.name,
+        userType: state.userType,
+        phone: state.phone,
+        cnic: state.userType == 'vendor' ? state.cnic : null,
+        shopName: state.userType == 'vendor' ? state.shopName : null,
+        shopAddress: state.userType == 'vendor' ? state.shopAddress : null,
+      );
+
+      if (userData != null) {
+        _authViewModel.setCurrentUser(userData);
+        return userData.userType;
+      }
+
+      throw "Signup failed. Please try again.";
+    } finally {
       _authViewModel.setLoading(false);
-      throw "This email is already used. Please login instead.";
     }
+  }
 
-    // 2️⃣ Create Firebase account + Firestore doc
-    final userData = await _authRepository.signUpWithEmailPassword(
-      email: state.email,
-      password: state.password,
-      name: state.name,
-      userType: state.userType,
-      phone: state.phone,
-      cnic: state.userType == 'vendor' ? state.cnic : null,
-      shopName: state.userType == 'vendor' ? state.shopName : null,
-      shopAddress: state.userType == 'vendor' ? state.shopAddress : null,
-    );
+  Future<String?> signUpWithGoogle() async {
+    _authViewModel.setLoading(true);
+    try {
+      final user = await _authRepository.signInWithGoogle(
+        userType: state.userType,
+        shopName: state.userType == 'vendor' ? state.shopName : null,
+        shopAddress: state.userType == 'vendor' ? state.shopAddress : null,
+        cnic: state.userType == 'vendor' ? state.cnic : null,
+        phone: state.phone.isNotEmpty ? state.phone : null,
+      );
 
-    if (userData != null) {
-      // ✅ Set current user with Firestore data immediately
+      if (user == null) throw "Google sign-in cancelled or failed.";
+
+      final userData = await _authRepository.getUserData(user.uid);
+      if (userData == null) throw "User data not found in Firestore.";
+
       _authViewModel.setCurrentUser(userData);
-
-      // ✅ Return userType for navigation
-      _authViewModel.setLoading(false);
       return userData.userType;
+    } finally {
+      _authViewModel.setLoading(false);
     }
-
-    throw "Signup failed. Please try again.";
-  } catch (e) {
-    _authViewModel.setLoading(false);
-    throw e.toString();
   }
 }
 
-
 // ---------------------------
-// Google Signup/Login
+// Provider
 // ---------------------------
-Future<String?> signUpWithGoogle() async {
-  _authViewModel.setLoading(true);
-  try {
-    final user = await _authRepository.signInWithGoogle(
-      userType: state.userType,
-      shopName: state.userType == 'vendor' ? state.shopName : null,
-      shopAddress: state.userType == 'vendor' ? state.shopAddress : null,
-      cnic: state.userType == 'vendor' ? state.cnic : null,
-      phone: state.phone.isNotEmpty ? state.phone : null,
-    );
-
-    if (user == null) throw "Google sign-in cancelled or failed.";
-
-    // ✅ Fetch Firestore document immediately
-    final userData = await _authRepository.getUserData(user.uid);
-    if (userData == null)
-      throw "User data not found in Firestore.";
-
-    // ✅ Set current user with Firestore data
-    _authViewModel.setCurrentUser(userData);
-
-    // ✅ Return role for navigation
-    _authViewModel.setLoading(false);
-    return userData.userType;
-  } catch (e) {
-    _authViewModel.setLoading(false);
-    throw e.toString();
-  }
-}
-}
-// ===============================
-// 3️⃣ Provider
-// ===============================
 final signupViewModelProvider =
     StateNotifierProvider<SignupViewModel, SignupState>((ref) {
   final authRepository = ref.watch(authRepositoryProvider);

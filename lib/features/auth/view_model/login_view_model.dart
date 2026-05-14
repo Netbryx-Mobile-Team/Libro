@@ -49,6 +49,25 @@ class LoginViewModel extends StateNotifier<LoginState> {
   // --- Validation ---
   String? validateEmail(String? value) => _validator.validateEmail(value);
   String? validatePassword(String? value) => _validator.validatePassword(value);
+Future<void> forgotPassword() async {
+  if (state.email.isEmpty) {
+    throw "Please enter your email first.";
+  }
+
+  _authViewModel.setLoading(true);
+  try {
+    await FirebaseAuth.instance.sendPasswordResetEmail(
+      email: state.email,
+    );
+    _authViewModel.setLoading(false);
+  } on FirebaseAuthException catch (e) {
+    _authViewModel.setLoading(false);
+    throw e.message ?? "Failed to send reset email.";
+  } catch (e) {
+    _authViewModel.setLoading(false);
+    throw "Something went wrong.";
+  }
+}
 
   // --- Login Logic ---
   Future<String?> login() async {
